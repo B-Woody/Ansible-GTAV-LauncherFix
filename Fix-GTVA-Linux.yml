@@ -1,0 +1,60 @@
+---
+
+- name: Fix broken GTAV Installation on Steam with Wine/Proton after Rockstar released their crappy new launcher
+  hosts: localhost
+  vars:
+    installdir: "~/.steam/steam/steamapps/common/Grand Theft Auto V/"
+  tasks:
+
+    - name: Ensure install directory is verfied before continuing
+      stat:
+        path: "{{ installdir }}"
+      register: directorycheck
+              
+    - name: Fail because GTA V install is not found
+      fail:
+        msg: Can't find GTAV installed at {{ installdir }}
+      when: not directorycheck.stat.exists or not directorycheck.stat.isdir
+
+    - name: Ensure No_GTAVLauncher mod is downloaded to GTA V installation directory
+      get_url:
+        url: https://files.gta5-mods.com/uploads/no-gtavlauncher/31e17a-No_GTAVLauncher.zip
+        dest: "{{ installdir }}"
+    
+    - name: Ensure No_GTAVLauncher mod is unzipped
+      unarchive:
+        src: "{{ installdir }}/31e17a-No_GTAVLauncher.zip"
+        dest: "{{ installdir }}"
+
+    - name: Gather facts on original GTAV Launche
+      stat:
+        path: "{{ installdir }}/PlayGTAV.exe"
+      register: launcher
+
+    - name: Fail if launcher is already a symlink
+      fail:
+        msg: "Looks like the mod is already installed"
+      when: launcher.stat.islnk  
+
+    - name: Backup original launcher
+      copy:
+        src: "{{ installdir }}/PlayGTAV.exe" 
+        dest: "{{ installdir }}/PlayGTAV.exe.old"
+      when: launcher.stat.exists and not launcher.stat.islnk
+      register: backup
+
+    - name: Delete  original launcher after backup
+      file: 
+        path: "{{ installdir }}/PlayGTAV.exe" 
+        state: absent
+      when: backup 
+
+    - name: Create softlink for No_GTAVLauncher 
+      file: 
+        src: "{{ installdir }}/No_GTAVLauncher.exe"
+        dest: "{{ installdir }}/PlayGTAV.exe"
+        state: link
+      when: backup and launcher.stat.exists and not launcher.stat.islnk 
+
+        
+
